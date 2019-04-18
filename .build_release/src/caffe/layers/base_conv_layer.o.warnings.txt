@@ -1,0 +1,19 @@
+src/caffe/layers/base_conv_layer.cpp:272:1: warning: multi-line comment [-Wcomment]
+ //  LOG(INFO) << " num " << col_buffer_shape_[1]\
+ ^
+src/caffe/layers/base_conv_layer.cpp: In instantiation of ‘void caffe::BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype*, const Dtype*, Dtype*, bool) [with Dtype = float]’:
+src/caffe/layers/base_conv_layer.cpp:622:1:   required from here
+src/caffe/layers/base_conv_layer.cpp:350:17: warning: unused variable ‘output_width’ [-Wunused-variable]
+       const int output_width = output_shape_[0];
+                 ^~~~~~~~~~~~
+src/caffe/layers/base_conv_layer.cpp:351:17: warning: unused variable ‘channel_size’ [-Wunused-variable]
+       const int channel_size = kernel_h*kernel_w;
+                 ^~~~~~~~~~~~
+src/caffe/layers/base_conv_layer.cpp: In instantiation of ‘void caffe::BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype*, const Dtype*, Dtype*, bool) [with Dtype = double]’:
+src/caffe/layers/base_conv_layer.cpp:622:1:   required from here
+src/caffe/layers/base_conv_layer.cpp:350:17: warning: unused variable ‘output_width’ [-Wunused-variable]
+       const int output_width = output_shape_[0];
+                 ^~~~~~~~~~~~
+src/caffe/layers/base_conv_layer.cpp:351:17: warning: unused variable ‘channel_size’ [-Wunused-variable]
+       const int channel_size = kernel_h*kernel_w;
+                 ^~~~~~~~~~~~
