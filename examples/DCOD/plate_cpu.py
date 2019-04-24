@@ -32,7 +32,6 @@ def parse_args():
     parser.add_argument('-model',dest='model',help='path to model prototxt file',type=str)
     parser.add_argument('-weights',dest='weights', help='path to weight file',type=str)
     parser.add_argument('-video', dest='video', help='path to input video',type=str)
-    parser.add_argument('-gpu', dest='gpu', help='specifiy using GPU or not', action='store_true')
     parser.add_argument('-threshold', dest='threshold', help='threshold to filter bbox with low confidence', type=float, default=0.3)
     return parser.parse_args()
 
@@ -61,8 +60,8 @@ def get_color_map(num_classes):
             colors.append((color_unit, 0, 0))
         else:
             last = colors[-1]
-            colors.append((last[2],last[0]+2*color_unit,last[1]+color_unit))
-
+            colors.append((last[2],last[0]+color_unit,last[1]+color_unit))
+            
     return colors
 
 if __name__ == '__main__':
@@ -70,11 +69,7 @@ if __name__ == '__main__':
     num_classes = 2
 
     args = parse_args()
-    if args.gpu:
-        caffe.set_mode_gpu()
-        caffe.set_device(0)
-    else:
-        caffe.set_mode_cpu()
+    caffe.set_mode_cpu()
     #Load the net in the test phase for inference, and configure input preprocessing.
     model_def = args.model
     model_weights = args.weights
@@ -84,10 +79,10 @@ if __name__ == '__main__':
                     caffe.TEST)     # use test mode (e.g., don't perform dropout)
 
     # input preprocessing: 'data' is the name of the input blob == net.inputs[0]
-    transformer = caffe.io.Transformer({'data': ((1,)+net.blobs['data'].data.shape[1:])})
+    transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
     transformer.set_transpose('data', (2, 0, 1))
     transformer.set_mean('data', np.array([104,117,123])) # mean pixel
-    #transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
+    transformer.set_raw_scale('data', 255)  # the reference model operates on images in [0,255] range instead of [0,1]
     transformer.set_channel_swap('data', (2,1,0))  # the reference model has channels in BGR order instead of RGB
 
     # DSOD detection
@@ -95,7 +90,7 @@ if __name__ == '__main__':
     # set net to batch size of 1
     image_resize_h = 300
     image_resize_w = 300
-    batch_size = 64
+    batch_size = 1
     net.blobs['data'].reshape(batch_size, 3, image_resize_h, image_resize_w)
 
     # set colors
@@ -109,38 +104,15 @@ if __name__ == '__main__':
 
     batch_list = []
 
-    cap = cv2.VideoCapture(args.video)
-
+    cap = cv2.VideoCapture('./1.mp4')
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter('./output.avi',fourcc, 20.0, (640,480))
     end = False
     while cap.isOpened():
-
-        images = []
-        for i in range(batch_size):
-            ret, img = cap.read()
-            if not ret:
-                # drop the last batch
-                end = True
-                break
-            else:
-                images.append(img)
-
-        if end:
-            break
-        else:
-            batch = np.stack(images, axis=0) # stack images in a batch to form a 4-dimensional tensor
-            batch_list.append(batch)
-
-    print('finish reading videos...')
-
-    output = []
-
-    for idx, batch in enumerate(batch_list):
-        
+        ret, image = cap.read()        
         #Run the net and examine the top_k results
-
-        for l in range(batch.shape[0]):
-            net.blobs['data'].data[l,:,:,:] = transformer.preprocess('data', batch[l], copy=True)
-
+        transformed_image = transformer.preprocess('data', image, copy=True)
+        net.blobs['data'].data[...] = transformed_image
         # Forward pass.
         t1 = time.time()
         detections = net.forward()['detection_out']
@@ -148,7 +120,6 @@ if __name__ == '__main__':
         fps = batch_size/time_increment
         print('fps ',fps)
         # Parse the outputs.
-        det_item = detections[0,0,:,0]
         det_label = detections[0,0,:,1]
         det_conf = detections[0,0,:,2]
         det_xmin = detections[0,0,:,3]
@@ -159,7 +130,6 @@ if __name__ == '__main__':
         # Get detections with confidence higher than 0.6.
         top_indices = [j for j, conf in enumerate(det_conf) if conf >= args.threshold]
 
-        top_item = det_item[top_indices]
         top_conf = det_conf[top_indices]
         top_label_indices = det_label[top_indices].tolist()
         top_labels = get_labelname(labelmap, top_label_indices)
@@ -168,14 +138,14 @@ if __name__ == '__main__':
         top_xmax = det_xmax[top_indices]
         top_ymax = det_ymax[top_indices]
 
-        origin = np.array(batch, dtype=np.uint8)
+        origin = np.array(image*255, dtype=np.uint8)
 
         for k in range(top_conf.shape[0]):
-            item = int(top_item[k])
-            xmin = int(round(top_xmin[k] * batch.shape[2]))
-            ymin = int(round(top_ymin[k] * batch.shape[1]))
-            xmax = int(round(top_xmax[k] * batch.shape[2]))
-            ymax = int(round(top_ymax[k] * batch.shape[1]))
+    
+            xmin = int(round(top_xmin[k] * origin.shape[1]))
+            ymin = int(round(top_ymin[k] * origin.shape[0]))
+            xmax = int(round(top_xmax[k] * origin.shape[1]))
+            ymax = int(round(top_ymax[k] * origin.shape[0]))
             score = top_conf[k]
             label = int(top_label_indices[k])
             label_name = top_labels[k]
@@ -185,27 +155,17 @@ if __name__ == '__main__':
             org = (xmin, ymin - 10)
             color = colors[label]
 
-            cv2.rectangle(origin[item], p1, p2, color=color, thickness=4)
-            cv2.putText(origin[item], display_txt, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.rectangle(origin, p1, p2, color=color, thickness=4)
+            cv2.putText(origin, display_txt, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            
+        out.write(origin)
         fps_str = 'fps: %.1f' % fps
-        for i in range(batch_size):
-            cv2.putText(origin[i], fps_str, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 5)
-            output.append(origin[i])
-            #img = cv2.imread(origin[i],0)
-            #cv2.imshow('image',origin[i])    
-        print('finish processing batch %d' % idx)
+        cv2.putText(origin, fps_str, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 5)
+        #cv2.imshow('image', origin[:,:,::-1])
+        #cv2.imwrite('./image.jpg',origin)
         
-    fps = (batch_size*len(batch_list))/total_time
 
-    output_dir, name = os.path.split(args.video)
-    output_path = os.path.join(output_dir, 'out_'+name)
-
-    output_size = (output[0].shape[0], output[0].shape[1])
-    #fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_path, fourcc, fps, output_size)
-
-    for image in output:
-        writer.write(image)
-        time.sleep(1/fps)
-
+    cap.release()
+    out.release()
+    cv2.destroyAllWindows()
+ 
