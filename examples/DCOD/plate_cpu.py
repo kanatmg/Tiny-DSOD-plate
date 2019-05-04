@@ -104,13 +104,14 @@ if __name__ == '__main__':
 
     batch_list = []
 
-    cap = cv2.VideoCapture('./1.mp4')
+    cap = cv2.VideoCapture(args.video)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter('./output.avi',fourcc, 20.0, (640,480))
     end = False
     while cap.isOpened():
         ret, image = cap.read()        
         #Run the net and examine the top_k results
+        #cv2.imshow('frame',image)
         transformed_image = transformer.preprocess('data', image, copy=True)
         net.blobs['data'].data[...] = transformed_image
         # Forward pass.
@@ -157,6 +158,7 @@ if __name__ == '__main__':
 
             cv2.rectangle(origin, p1, p2, color=color, thickness=4)
             cv2.putText(origin, display_txt, org, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.imshow('image', origin)
             
         out.write(origin)
         fps_str = 'fps: %.1f' % fps
